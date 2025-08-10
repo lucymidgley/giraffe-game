@@ -3,8 +3,10 @@ package main
 import (
 	"embed"
 	"fmt"
+	"image"
 	"image/color"
 	_ "image/png"
+	"io/fs"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
@@ -19,6 +21,8 @@ const (
 
 //go:embed assets/*
 var assets embed.FS
+
+var Bricks = mustLoadImages("assets/bricks/*.png")
 
 var ScoreFont = mustLoadFont("assets/font.ttf")
 
@@ -38,6 +42,35 @@ func mustLoadFont(name string) font.Face {
 		panic(err)
 	}
 	return face
+}
+
+func mustLoadImage(name string) *ebiten.Image {
+	f, err := assets.Open(name)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	img, _, err := image.Decode(f)
+	if err != nil {
+		panic(err)
+	}
+
+	return ebiten.NewImageFromImage(img)
+}
+
+func mustLoadImages(path string) []*ebiten.Image {
+	matches, err := fs.Glob(assets, path)
+	if err != nil {
+		panic(err)
+	}
+
+	images := make([]*ebiten.Image, len(matches))
+	for i, match := range matches {
+		images[i] = mustLoadImage(match)
+	}
+
+	return images
 }
 
 type Game struct {
