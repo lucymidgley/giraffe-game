@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"math/rand"
 
+	"game/components"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
@@ -19,12 +21,12 @@ import (
 const (
 	ScreenWidth     = 832 // 13 bricks wide
 	ScreenHeight    = 600
-	BlockHeight     = 64
-	BlockWidth      = 64
-	GroundY         = ScreenHeight - 2*BlockHeight
+	BrickHeight     = 64
+	BrickWidth      = 64
+	GroundY         = ScreenHeight - 2*BrickHeight
 	Gravity         = 0.2
 	ForwardMotion   = 2.0
-	JumpingStrength = 5.0
+	JumpingStrength = 6.0
 )
 
 //go:embed assets/*
@@ -102,7 +104,7 @@ func NewBrick(x, y float64) *Brick {
 
 	pos := Vector{
 		X: x,
-		Y: ScreenHeight - BlockHeight - y,
+		Y: ScreenHeight - BrickHeight - y,
 	}
 	return &Brick{
 		position: pos,
@@ -112,21 +114,23 @@ func NewBrick(x, y float64) *Brick {
 
 func (g *Game) DrawGround() {
 	for i := 0; i < 13; i++ {
-		brick := NewBrick(float64(i*BlockWidth), 0)
+		brick := NewBrick(float64(i*BrickWidth), 0)
 		g.bricks = append(g.bricks, brick)
 	}
 
 	xCoords := []int{4, 5, 6, 7, 8, 9, 10, 11, 12}
-	randomX := float64(xCoords[rand.Intn(len(xCoords))] * BlockWidth)
-	brick1 := NewBrick(randomX, BlockHeight)
-	brick2 := NewBrick(randomX, 2*BlockHeight)
+	randomX := float64(xCoords[rand.Intn(len(xCoords))] * BrickWidth)
+	brick1 := NewBrick(randomX, BrickHeight)
+	brick2 := NewBrick(randomX, 2*BrickHeight)
 	g.bricks = append(g.bricks, brick1, brick2)
+	obstacleRect := components.NewRect(brick1.position.X, brick1.position.Y, BrickWidth, 2*BrickHeight)
+	g.obstacles = append(g.obstacles, &Obstacle{obstacleRect, false})
 }
 func NewPlayer(game *Game) *Player {
 	sprite := PlayerSprite
 
 	pos := Vector{
-		X: BlockWidth / 2,
+		X: BrickWidth / 2,
 		Y: GroundY,
 	}
 	return &Player{
@@ -137,7 +141,9 @@ func NewPlayer(game *Game) *Player {
 }
 
 func (p *Player) Update() {
-	p.position.X += ForwardMotion
+	if !p.game.freeze {
+		p.position.X += ForwardMotion
+	}
 	if p.isJumping {
 		if p.position.Y >= GroundY {
 			p.isJumping = false
@@ -153,6 +159,9 @@ func (p *Player) Update() {
 		p.velocity -= JumpingStrength
 		p.jumpCount += 1
 	}
+	if ebiten.IsKeyPressed(ebiten.KeySpace) {
+		p.game.freeze = true
+	}
 	p.position.Y += p.velocity
 }
 
@@ -167,6 +176,16 @@ func (p *Player) Draw(screen *ebiten.Image) {
 	screen.DrawImage(p.sprite, op)
 }
 
+func (p *Player) Collider() components.Rect {
+	bounds := p.sprite.Bounds()
+	return components.NewRect(
+		p.position.X,
+		p.position.Y,
+		float64(bounds.Dx())*0.35,
+		float64(bounds.Dy())*0.35,
+	)
+}
+
 func (b *Brick) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 
@@ -179,16 +198,33 @@ type Vector struct {
 	X float64
 	Y float64
 }
+type Obstacle struct {
+	bounds  components.Rect
+	cleared bool
+}
 
 type Game struct {
-	score  int
-	player *Player
-	bricks []*Brick
+	score     int
+	player    *Player
+	bricks    []*Brick
+	obstacles []*Obstacle
+	freeze    bool
 }
 
 func (g *Game) Update() error {
 	g.player.Update()
-
+	if !g.freeze {
+		for _, o := range g.obstacles {
+			if o.bounds.Intersects(g.player.Collider()) {
+				g.Reset()
+			} else {
+				if !o.cleared && g.player.position.X > o.bounds.MaxX() {
+					o.cleared = true
+					g.score++
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -211,6 +247,14 @@ func NewGame() *Game {
 	g.player = NewPlayer(g)
 
 	return g
+}
+
+func (g *Game) Reset() {
+	g.player = NewPlayer(g)
+	g.bricks = nil
+	g.score = 0
+	g.obstacles = nil
+	g.DrawGround()
 }
 
 func main() {
