@@ -21,6 +21,7 @@ const (
 	BlockHeight  = 64
 	BlockWidth   = 64
 	GroundY      = ScreenHeight - 2*BlockHeight
+	Gravity      = 0.1
 )
 
 //go:embed assets/*
@@ -81,9 +82,11 @@ var PlayerSprite = mustLoadImage("assets/giraffe.png")
 var BrickSprites = mustLoadImages("assets/bricks/*.png")
 
 type Player struct {
-	game     *Game
-	position Vector
-	sprite   *ebiten.Image
+	game      *Game
+	position  Vector
+	sprite    *ebiten.Image
+	velocity  float64
+	isJumping bool
 }
 type Brick struct {
 	position Vector
@@ -130,11 +133,21 @@ func NewPlayer(game *Game) *Player {
 }
 
 func (p *Player) Update() {
-	speed := 5.0
+	jumpingStrength := 0.5
+	if p.isJumping {
+		if p.position.Y >= GroundY {
+			p.isJumping = false
+			p.velocity = 0
+		} else {
+			p.velocity += Gravity
+		}
+	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyUp) {
-		p.position.Y -= speed
+		p.isJumping = true
+		p.velocity -= jumpingStrength
 	}
+	p.position.Y += p.velocity
 }
 
 func (p *Player) Draw(screen *ebiten.Image) {
