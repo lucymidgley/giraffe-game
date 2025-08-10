@@ -7,7 +7,9 @@ import (
 	"image/color"
 	_ "image/png"
 	"io/fs"
+	"math"
 	"math/rand"
+	"slices"
 
 	"game/components"
 
@@ -27,6 +29,7 @@ const (
 	Gravity         = 0.2
 	ForwardMotion   = 2.0
 	JumpingStrength = 6.0
+	FrameWidth      = 13 * BrickWidth
 )
 
 //go:embed assets/*
@@ -112,19 +115,20 @@ func NewBrick(x, y float64) *Brick {
 	}
 }
 
-func (g *Game) DrawGround() {
-	for i := 0; i < 13; i++ {
-		brick := NewBrick(float64(i*BrickWidth), 0)
+func (g *Game) DrawGround(x float64) {
+	obstaclePostions := []int{rand.Intn(26), rand.Intn(26), rand.Intn(26)}
+	for i := 0; i < 26; i++ {
+		xCoord := float64(i*BrickWidth) + x
+		brick := NewBrick(xCoord, 0)
 		g.bricks = append(g.bricks, brick)
+		if slices.Contains(obstaclePostions, i) {
+			brick1 := NewBrick(xCoord, BrickHeight)
+			brick2 := NewBrick(xCoord, 2*BrickHeight)
+			g.bricks = append(g.bricks, brick1, brick2)
+			obstacleRect := components.NewRect(brick1.position.X, brick1.position.Y, BrickWidth, 2*BrickHeight)
+			g.obstacles = append(g.obstacles, &Obstacle{obstacleRect, false})
+		}
 	}
-
-	xCoords := []int{4, 5, 6, 7, 8, 9, 10, 11, 12}
-	randomX := float64(xCoords[rand.Intn(len(xCoords))] * BrickWidth)
-	brick1 := NewBrick(randomX, BrickHeight)
-	brick2 := NewBrick(randomX, 2*BrickHeight)
-	g.bricks = append(g.bricks, brick1, brick2)
-	obstacleRect := components.NewRect(brick1.position.X, brick1.position.Y, BrickWidth, 2*BrickHeight)
-	g.obstacles = append(g.obstacles, &Obstacle{obstacleRect, false})
 }
 func NewPlayer(game *Game) *Player {
 	sprite := PlayerSprite
@@ -172,6 +176,7 @@ func (p *Player) Draw(screen *ebiten.Image) {
 	scaleY := 0.35
 	op.GeoM.Scale(scaleX, scaleY)
 	op.GeoM.Translate(p.position.X, p.position.Y)
+	op.GeoM.Translate(p.game.camera.X, p.game.camera.Y)
 
 	screen.DrawImage(p.sprite, op)
 }
@@ -186,10 +191,11 @@ func (p *Player) Collider() components.Rect {
 	)
 }
 
-func (b *Brick) Draw(screen *ebiten.Image) {
+func (b *Brick) Draw(screen *ebiten.Image, g *Game) {
 	op := &ebiten.DrawImageOptions{}
 
 	op.GeoM.Translate(b.position.X, b.position.Y)
+	op.GeoM.Translate(g.camera.X, g.camera.Y)
 
 	screen.DrawImage(b.sprite, op)
 }
@@ -204,11 +210,13 @@ type Obstacle struct {
 }
 
 type Game struct {
-	score     int
-	player    *Player
-	bricks    []*Brick
-	obstacles []*Obstacle
-	freeze    bool
+	score            int
+	player           *Player
+	bricks           []*Brick
+	obstacles        []*Obstacle
+	freeze           bool
+	camera           Vector
+	nextDrawingPoint float64
 }
 
 func (g *Game) Update() error {
@@ -225,6 +233,11 @@ func (g *Game) Update() error {
 			}
 		}
 	}
+	if math.Abs(g.camera.X) >= g.nextDrawingPoint {
+		g.DrawGround(g.nextDrawingPoint + FrameWidth)
+		g.nextDrawingPoint = g.nextDrawingPoint + FrameWidth
+	}
+	g.camera.X -= ForwardMotion
 	return nil
 }
 
@@ -232,7 +245,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	g.player.Draw(screen)
 
 	for _, b := range g.bricks {
-		b.Draw(screen)
+		b.Draw(screen, g)
 	}
 
 	text.Draw(screen, fmt.Sprintf("%06d", g.score), ScoreFont, ScreenWidth/2-100, 50, color.White)
@@ -243,7 +256,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func NewGame() *Game {
-	g := &Game{}
+	g := &Game{nextDrawingPoint: FrameWidth}
 	g.player = NewPlayer(g)
 
 	return g
@@ -254,12 +267,13 @@ func (g *Game) Reset() {
 	g.bricks = nil
 	g.score = 0
 	g.obstacles = nil
-	g.DrawGround()
+	g.DrawGround(0)
+	g.camera = Vector{}
 }
 
 func main() {
 	g := NewGame()
-	g.DrawGround()
+	g.DrawGround(0)
 
 	err := ebiten.RunGame(g)
 	if err != nil {
