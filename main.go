@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	ScreenWidth  = 800
+	ScreenWidth  = 832 // 13 bricks wide
 	ScreenHeight = 600
 )
 
@@ -86,7 +86,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return outsideWidth, outsideHeight
+	return ScreenWidth, ScreenHeight
 }
 
 func main() {
