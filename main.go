@@ -10,18 +10,21 @@ import (
 	"math/rand"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 )
 
 const (
-	ScreenWidth  = 832 // 13 bricks wide
-	ScreenHeight = 600
-	BlockHeight  = 64
-	BlockWidth   = 64
-	GroundY      = ScreenHeight - 2*BlockHeight
-	Gravity      = 0.1
+	ScreenWidth     = 832 // 13 bricks wide
+	ScreenHeight    = 600
+	BlockHeight     = 64
+	BlockWidth      = 64
+	GroundY         = ScreenHeight - 2*BlockHeight
+	Gravity         = 0.2
+	ForwardMotion   = 2.0
+	JumpingStrength = 5.0
 )
 
 //go:embed assets/*
@@ -87,6 +90,7 @@ type Player struct {
 	sprite    *ebiten.Image
 	velocity  float64
 	isJumping bool
+	jumpCount int
 }
 type Brick struct {
 	position Vector
@@ -133,19 +137,21 @@ func NewPlayer(game *Game) *Player {
 }
 
 func (p *Player) Update() {
-	jumpingStrength := 0.5
+	p.position.X += ForwardMotion
 	if p.isJumping {
 		if p.position.Y >= GroundY {
 			p.isJumping = false
 			p.velocity = 0
+			p.jumpCount = 0
 		} else {
 			p.velocity += Gravity
 		}
 	}
 
-	if ebiten.IsKeyPressed(ebiten.KeyUp) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyUp) && p.jumpCount < 3 {
 		p.isJumping = true
-		p.velocity -= jumpingStrength
+		p.velocity -= JumpingStrength
+		p.jumpCount += 1
 	}
 	p.position.Y += p.velocity
 }
