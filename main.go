@@ -117,13 +117,18 @@ func NewBrick(x, y float64) *Brick {
 }
 
 func (g *Game) DrawGround(x float64) {
-	obstaclePostions := []int{rand.Intn(6), rand.Intn(6) + 9, rand.Intn(5) + 19}
+	obstaclePostions := []int{rand.Intn(10), rand.Intn(10) + 13}
 	for i := 0; i < 26; i++ {
 		xCoord := float64(i*BrickWidth) + x
 		brick := NewBrick(xCoord, 0)
 		g.bricks = append(g.bricks, brick)
 		if slices.Contains(obstaclePostions, i) {
-			bricksHeight := rand.Intn(3) + 1
+			var bricksHeight int
+			if g.speedMultiplier > 3 {
+				bricksHeight = rand.Intn(2) + 1
+			} else {
+				bricksHeight = 1
+			}
 			obstacleBricks := []*Brick{}
 			for j := range bricksHeight {
 				newBrick := NewBrick(xCoord, float64((j+1)*BrickHeight))
@@ -150,11 +155,8 @@ func NewPlayer(game *Game) *Player {
 }
 
 func (p *Player) Update() {
-	if p.game.speedMultiplier > 0 {
-		p.position.X += ForwardMotion * p.game.speedMultiplier
-	} else {
-		p.position.X += ForwardMotion
-	}
+	p.position.X += ForwardMotion * p.game.speedMultiplier
+
 	if p.isJumping {
 		if p.position.Y >= GroundY {
 			p.isJumping = false
@@ -162,16 +164,22 @@ func (p *Player) Update() {
 			p.jumpCount = 0
 			p.position.Y = GroundY
 		} else {
-			p.velocity += p.game.Gravity
+			p.velocity += p.game.Gravity * p.position.Y / ScreenHeight * 2
 		}
 	}
 
-	if (inpututil.IsKeyJustPressed(ebiten.KeySpace)) && p.jumpCount < 3 {
+	if inpututil.IsKeyJustPressed(ebiten.KeySpace) && p.jumpCount <= 2 {
 		p.isJumping = true
 		p.velocity -= p.game.JumpingStrength
 		p.jumpCount += 1
 	}
-	p.position.Y += p.velocity
+	// if ebiten.IsKeyPressed(ebiten.KeySpace) {
+	// }
+	if p.position.Y+p.velocity < 5 {
+		p.velocity = 0
+	} else {
+		p.position.Y += p.velocity
+	}
 }
 
 func (p *Player) Draw(screen *ebiten.Image) {
@@ -245,25 +253,21 @@ func (g *Game) Update() error {
 	if math.Abs(g.camera.X) >= g.nextDrawingPoint {
 		g.DrawGround(g.nextDrawingPoint + FrameWidth)
 		g.nextDrawingPoint = g.nextDrawingPoint + 2*FrameWidth
+		g.speedMultiplier += 0.5
 	}
-	g.speedMultiplier = math.Floor(g.camera.X*-1/FrameWidth) * 0.5
-	if g.speedMultiplier > 0 {
-		g.camera.X -= ForwardMotion * g.speedMultiplier
-	} else {
-		g.camera.X -= ForwardMotion
-	}
+	g.camera.X -= ForwardMotion * g.speedMultiplier
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
-		g.Gravity -= 0.05
+		g.Gravity -= 1
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyUp) {
-		g.Gravity += 0.05
+		g.Gravity += 1
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyRight) {
-		g.JumpingStrength += 0.05
+		g.JumpingStrength += 1
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyLeft) {
-		g.JumpingStrength -= 0.05
+		g.JumpingStrength -= 1
 	}
 	return nil
 }
@@ -287,7 +291,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func NewGame() *Game {
-	g := &Game{nextDrawingPoint: FrameWidth, JumpingStrength: 8.0, Gravity: 0.4}
+	g := &Game{nextDrawingPoint: FrameWidth, JumpingStrength: 37.0, Gravity: 2, speedMultiplier: 2}
 	g.player = NewPlayer(g)
 
 	return g
@@ -301,7 +305,7 @@ func (g *Game) Reset() {
 	g.DrawGround(0)
 	g.camera = Vector{}
 	g.nextDrawingPoint = FrameWidth
-	g.speedMultiplier = 0
+	g.speedMultiplier = 2
 }
 
 func main() {
