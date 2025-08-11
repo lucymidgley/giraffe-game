@@ -37,9 +37,10 @@ var assets embed.FS
 
 var Bricks = mustLoadImages("assets/bricks/*.png")
 
-var ScoreFont = mustLoadFont("assets/font.ttf")
+var ScoreFont = mustLoadFont("assets/font.ttf", 48.0)
+var HighScoreFont = mustLoadFont("assets/font.ttf", 20.0)
 
-func mustLoadFont(name string) font.Face {
+func mustLoadFont(name string, size float64) font.Face {
 	f, err := assets.ReadFile(name)
 	if err != nil {
 		panic(err)
@@ -50,7 +51,7 @@ func mustLoadFont(name string) font.Face {
 		panic(err)
 	}
 
-	face, err := opentype.NewFace(tt, &opentype.FaceOptions{Size: 48, DPI: 72, Hinting: font.HintingVertical})
+	face, err := opentype.NewFace(tt, &opentype.FaceOptions{Size: size, DPI: 72, Hinting: font.HintingVertical})
 	if err != nil {
 		panic(err)
 	}
@@ -217,6 +218,7 @@ type Game struct {
 	freeze           bool
 	camera           Vector
 	nextDrawingPoint float64
+	highScore        int
 }
 
 func (g *Game) Update() error {
@@ -229,6 +231,9 @@ func (g *Game) Update() error {
 				if !o.cleared && g.player.position.X > o.bounds.MaxX() {
 					o.cleared = true
 					g.score++
+					if g.highScore < g.score {
+						g.highScore = g.score
+					}
 				}
 			}
 		}
@@ -248,7 +253,8 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		b.Draw(screen, g)
 	}
 
-	text.Draw(screen, fmt.Sprintf("%06d", g.score), ScoreFont, ScreenWidth/2-100, 50, color.White)
+	text.Draw(screen, fmt.Sprintf("%06d", g.score), ScoreFont, 30, 50, color.White)
+	text.Draw(screen, fmt.Sprintf("High Score: "+"%06d", g.highScore), HighScoreFont, ScreenWidth-270, 30, color.White)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -269,6 +275,7 @@ func (g *Game) Reset() {
 	g.obstacles = nil
 	g.DrawGround(0)
 	g.camera = Vector{}
+	g.nextDrawingPoint = FrameWidth
 }
 
 func main() {
